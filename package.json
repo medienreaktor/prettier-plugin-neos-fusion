@@ -1,38 +1,38 @@
 {
-    "name": "prettier-plugin-neos-fusion",
-    "version": "0.1.0",
-    "description": "Prettier plugin for Neos Fusion files",
-    "type": "module",
-    "main": "src/index.js",
-    "exports": {
-        ".": "./src/index.js"
-    },
-    "keywords": [
-        "prettier",
-        "prettier-plugin",
-        "neos",
-        "fusion"
-    ],
-    "license": "MIT",
-    "author": "medienreaktor GmbH",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/medienreaktor/prettier-plugin-neos-fusion.git"
-    },
-    "homepage": "https://github.com/medienreaktor/prettier-plugin-neos-fusion",
-    "bugs": {
-        "url": "https://github.com/medienreaktor/prettier-plugin-neos-fusion/issues"
-    },
-    "peerDependencies": {
-        "prettier": ">=3.0.0"
-    },
-    "devDependencies": {
-        "prettier": "^3.0.0"
-    },
-    "engines": {
-        "node": ">=18.0.0"
-    },
-    "files": [
-        "src/"
-    ]
+  "name": "prettier-plugin-neos-fusion",
+  "version": "0.1.1",
+  "description": "Prettier plugin for Neos Fusion files",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "keywords": [
+    "prettier",
+    "prettier-plugin",
+    "neos",
+    "fusion"
+  ],
+  "license": "MIT",
+  "author": "medienreaktor GmbH",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/medienreaktor/prettier-plugin-neos-fusion.git"
+  },
+  "homepage": "https://github.com/medienreaktor/prettier-plugin-neos-fusion",
+  "bugs": {
+    "url": "https://github.com/medienreaktor/prettier-plugin-neos-fusion/issues"
+  },
+  "peerDependencies": {
+    "prettier": ">=3.0.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "src/"
+  ]
 }

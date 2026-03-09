@@ -90,7 +90,11 @@ class Parser {
   parseStatementList(stopToken = null) {
     const statements = [];
 
-    this.bigGap(); // leading gap before first statement — blank lines here don't matter
+    // Leading gap — collect any comments before the first statement
+    const { comments: initialComments } = this.bigGap();
+    for (const c of initialComments) {
+      statements.push({ type: 'CommentStatement', value: c.value });
+    }
 
     let nextHasBlankLine = false;
 
@@ -99,8 +103,21 @@ class Parser {
       if (nextHasBlankLine) stmt.hasLeadingBlankLine = true;
       statements.push(stmt);
 
-      const { hasBlankLine } = this.bigGap();
-      nextHasBlankLine = hasBlankLine;
+      const { hasBlankLine, comments } = this.bigGap();
+
+      if (comments.length > 0) {
+        // Attach blank-line flag to the first comment in the gap
+        let isFirst = true;
+        for (const c of comments) {
+          const commentStmt = { type: 'CommentStatement', value: c.value };
+          if (isFirst && hasBlankLine) commentStmt.hasLeadingBlankLine = true;
+          statements.push(commentStmt);
+          isFirst = false;
+        }
+        nextHasBlankLine = false;
+      } else {
+        nextHasBlankLine = hasBlankLine;
+      }
     }
 
     return { type: 'StatementList', statements };
@@ -143,9 +160,11 @@ class Parser {
     else if (fp) filePattern = fp.value;
     else throw new SyntaxError('Expected file pattern after include:');
 
-    this.parseEndOfStatement();
+    const trailingComment = this.parseEndOfStatement();
 
-    return { type: 'IncludeStatement', filePattern, start: token.start };
+    const node = { type: 'IncludeStatement', filePattern, start: token.start };
+    if (trailingComment) node.trailingComment = trailingComment;
+    return node;
   }
 
   /**
@@ -163,6 +182,7 @@ class Parser {
     this.lexer.accept(T.SPACE);
 
     let block = null;
+    let trailingComment = null;
     if (this.peek(T.LBRACE)) {
       block = this.parseBlock();
     } else {
@@ -170,10 +190,12 @@ class Parser {
         const got = this.lexer.remaining.slice(0, 30).replace(/\n/g, '\\n');
         throw new SyntaxError(`Expected operator or block after path, got: "${got}"`);
       }
-      this.parseEndOfStatement();
+      trailingComment = this.parseEndOfStatement();
     }
 
-    return { type: 'ObjectStatement', path, operation, block };
+    const node = { type: 'ObjectStatement', path, operation, block };
+    if (trailingComment) node.trailingComment = trailingComment;
+    return node;
   }
 
   /**
@@ -302,12 +324,14 @@ class Parser {
 
   /**
    * EndOfStatement = SmallGap ( EOF / NEWLINE )
+   * Returns any trailing inline comment value, or null.
    */
   parseEndOfStatement() {
-    this.smallGap();
-    if (this.peek(T.EOF)) return;
-    if (this.peek(T.NEWLINE)) { this.lexer.accept(T.NEWLINE); return; }
-    if (this.peek(T.RBRACE)) return; // allow end of block without trailing newline
+    const comments = this.smallGap();
+    const trailingComment = comments.length > 0 ? comments[comments.length - 1].value : null;
+    if (this.peek(T.EOF)) return trailingComment;
+    if (this.peek(T.NEWLINE)) { this.lexer.accept(T.NEWLINE); return trailingComment; }
+    if (this.peek(T.RBRACE)) return trailingComment; // allow end of block without trailing newline
 
     const got = this.lexer.remaining.slice(0, 20).replace(/\n/g, '\\n');
     throw new SyntaxError(`Expected end of statement (newline or EOF), got: "${got}"`);

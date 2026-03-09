@@ -18,6 +18,9 @@ export function print(path, options, printFn) {
     case 'StatementList':
       return printStatementList(path, printFn);
 
+    case 'CommentStatement':
+      return node.value;
+
     case 'IncludeStatement':
       return printIncludeStatement(node);
 
@@ -105,7 +108,8 @@ function printStatementList(path, printFn) {
 }
 
 function printIncludeStatement(node) {
-  return `include: ${node.filePattern}`;
+  const base = `include: ${node.filePattern}`;
+  return node.trailingComment ? `${base} ${node.trailingComment}` : base;
 }
 
 function printObjectStatement(path, printFn) {
@@ -118,6 +122,10 @@ function printObjectStatement(path, printFn) {
 
   if (node.block) {
     parts.push(' ', path.call(printFn, 'block'));
+  }
+
+  if (node.trailingComment) {
+    parts.push(' ', node.trailingComment);
   }
 
   return parts;
