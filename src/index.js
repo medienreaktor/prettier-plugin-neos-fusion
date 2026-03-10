@@ -1,5 +1,5 @@
 import { parse } from "./parser/parser.js";
-import { print } from "./printer/printer.js";
+import { print, embed } from "./printer/printer.js";
 
 export const languages = [
   {
@@ -22,5 +22,6 @@ export const parsers = {
 export const printers = {
   "fusion-ast": {
     print,
+    embed,
   },
 };

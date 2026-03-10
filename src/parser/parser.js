@@ -288,8 +288,9 @@ class Parser {
    */
   parseDslExpression() {
     const identifier = this.expect(T.DSL_EXPRESSION_START).value;
-    const content = this.expect(T.DSL_EXPRESSION_CONTENT).value; // includes backticks
-    return { type: 'DslExpressionValue', identifier, value: content.slice(1, -1), raw: content };
+    const content = this.lexer.acceptDslContent();
+    if (!content) throw new SyntaxError(`Expected backtick-delimited DSL content after "${identifier}"`);
+    return { type: 'DslExpressionValue', identifier, value: content.value.slice(1, -1), raw: content.value };
   }
 
   /**

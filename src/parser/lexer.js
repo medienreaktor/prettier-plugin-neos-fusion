@@ -92,6 +92,77 @@ export class Lexer {
   }
 
   /**
+   * Scan a DSL expression content token (backtick-delimited).
+   * Correctly handles backticks inside JS expressions ({...}) within the content
+   * by tracking brace depth and treating backticks inside braces as template literals.
+   * Returns a token or null if the cursor is not at a backtick.
+   */
+  acceptDslContent() {
+    if (this.lookahead !== null) {
+      return this.lookahead.type === T.DSL_EXPRESSION_CONTENT ? this.consume() : null;
+    }
+
+    const code = this.code;
+    let i = this.cursor;
+
+    if (i >= code.length || code[i] !== '`') return null;
+    const start = i;
+    i++; // skip opening backtick
+
+    let braceDepth = 0; // depth of { } within AFX/JS expressions
+
+    while (i < code.length) {
+      const ch = code[i];
+
+      if (ch === '\\') {
+        i += 2; // skip escape sequence
+      } else if (ch === '`') {
+        if (braceDepth === 0) {
+          i++; // closing backtick of the DSL block
+          break;
+        }
+        // Template literal inside a JS expression — scan to its closing backtick
+        i++;
+        while (i < code.length) {
+          if (code[i] === '\\') { i += 2; }
+          else if (code[i] === '`') { i++; break; } // end inner template
+          else if (code[i] === '$' && code[i + 1] === '{') {
+            i += 2; // skip ${
+            let d = 1;
+            while (i < code.length && d > 0) {
+              if (code[i] === '{') d++;
+              else if (code[i] === '}') d--;
+              else if (code[i] === '\\') i++;
+              i++;
+            }
+          } else { i++; }
+        }
+      } else if (ch === '{') {
+        braceDepth++;
+        i++;
+      } else if (ch === '}' && braceDepth > 0) {
+        braceDepth--;
+        i++;
+      } else if (braceDepth > 0 && (ch === '"' || ch === "'")) {
+        // String literal inside a JS expression — scan to closing quote
+        const q = ch; i++;
+        while (i < code.length && code[i] !== q) {
+          if (code[i] === '\\') i++;
+          i++;
+        }
+        i++; // closing quote
+      } else {
+        i++;
+      }
+    }
+
+    const value = code.slice(start, i);
+    this.cursor = i;
+    this.lookahead = { type: T.DSL_EXPRESSION_CONTENT, value, start, end: i };
+    return this.consume();
+  }
+
+  /**
    * Consume spaces and comments (no newlines).
    */
   skipSmallGap() {

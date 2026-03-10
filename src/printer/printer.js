@@ -8,6 +8,103 @@
 import { doc } from 'prettier';
 const { hardline, indent, join, group } = doc.builders;
 
+/**
+ * Embed handler: format AFX content using Prettier's babel (JSX) parser.
+ * Multi-root AFX is wrapped in a JSX fragment for formatting, then unwrapped.
+ * Single-line AFX and non-afx DSL fall back to the regular print function.
+ */
+export function embed(path, options) {
+  const node = path.node;
+  if (node.type !== 'DslExpressionValue' || node.identifier !== 'afx') {
+    return undefined;
+  }
+
+  return async () => {
+    // Single-line AFX stays as-is (handled by regular print)
+    if (!node.value.includes('\n')) return undefined;
+
+    try {
+      const { format } = await import('prettier');
+
+      // Build a placeholder map for all JSX-invalid constructs, with a shared counter
+      // so the prefixes NeosCmp/neosAt never collide.
+      const replacements = new Map(); // original → placeholder
+      let ctr = 0;
+
+      const sanitized = node.value
+        // 1. Tag names: Vendor.Package:Type → NeosCmp0
+        .replace(/(<\/?)([A-Za-z][A-Za-z0-9.]*:[A-Za-z0-9.]+)/g, (_, prefix, name) => {
+          if (!replacements.has(name)) replacements.set(name, `NeosCmp${ctr++}`);
+          return prefix + replacements.get(name);
+        })
+        // 2. @meta attributes: @if, @apply, @class → neosAt0
+        //    Match only at attribute-name position (preceded by whitespace or <)
+        .replace(/(?<=[\s<])@([a-zA-Z][a-zA-Z0-9]*)(?=[\s=\/>{])/g, (_, name) => {
+          const key = `@${name}`;
+          if (!replacements.has(key)) replacements.set(key, `neosAt${ctr++}`);
+          return replacements.get(key);
+        })
+        // 3. Namespaced attributes: attributes.class, attributes.href → neosAt
+        //    Require single = (not ==) so JS comparisons like props.layout == '...' are skipped
+        .replace(/(?<=[\s<])([a-zA-Z][a-zA-Z0-9]*)\.([a-zA-Z][a-zA-Z0-9]*)(?=\s*=(?![=>]))/g, (match) => {
+          if (!replacements.has(match)) replacements.set(match, `neosAt${ctr++}`);
+          return replacements.get(match);
+        })
+        // 4. Colon-prefixed bindings (Vue/Alpine): :class, :href → neosAt
+        //    Must be followed by = to avoid matching inside string values
+        .replace(/(?<=[\s<]):([a-zA-Z][a-zA-Z0-9-]*)(?=\s*=)/g, (_, name) => {
+          const key = `:${name}`;
+          if (!replacements.has(key)) replacements.set(key, `neosAt${ctr++}`);
+          return replacements.get(key);
+        })
+        // 5. Colon-in-name attributes (Alpine x-on:click, HTMX hx-on:htmx:before) → neosAt
+        //    Must be followed by = (not ==) to avoid matching Tailwind classes inside strings
+        .replace(/(?<=[\s<])([a-zA-Z][a-zA-Z0-9-]*:[a-zA-Z][a-zA-Z0-9-]*)(?=\s*=(?![=>]))/g, (match) => {
+          if (!replacements.has(match)) replacements.set(match, `neosAt${ctr++}`);
+          return replacements.get(match);
+        });
+
+      const reverseMap = new Map([...replacements].map(([k, v]) => [v, k]));
+
+      // Wrap in a JSX fragment so multi-root content is valid babel/JSX input
+      const formatted = await format(`<>\n${sanitized}\n</>`, {
+        parser: 'babel',
+        printWidth: options.printWidth,
+        tabWidth: options.tabWidth,
+        useTabs: options.useTabs,
+      });
+
+      // Strip the outer fragment wrapper (<> ... </>;)
+      const rawInner = formatted
+        .replace(/^<>\s*\n/, '')
+        .replace(/\n\s*<\/>\s*;?\s*\n?$/, '');
+
+      if (!rawInner.trim()) return undefined;
+
+      // Restore all original Neos constructs
+      const inner = rawInner.replace(/(?:NeosCmp|neosAt)\d+/g, (m) => reverseMap.get(m) ?? m);
+
+      // Strip the common minimum indentation so content starts at column 0,
+      // then let indent() place it one level deeper than the surrounding context.
+      const lines = inner.split('\n');
+      const nonEmpty = lines.filter((l) => l.trim() !== '');
+      const minIndent = nonEmpty.length > 0
+        ? Math.min(...nonEmpty.map((l) => l.match(/^(\s*)/)[1].length))
+        : 0;
+      const stripped = lines.map((l) => l.slice(minIndent));
+
+      return [
+        'afx`',
+        indent([hardline, join(hardline, stripped)]),
+        hardline,
+        '`',
+      ];
+    } catch {
+      return undefined; // fall back to regular print
+    }
+  };
+}
+
 export function print(path, options, printFn) {
   const node = path.node;
 
